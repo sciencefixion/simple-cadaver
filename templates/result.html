@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}Final Story{% endblock %}
+
+{% block content %}
+<h1>Your Exquisite Corpse</h1>
+
+<div class="story-container">
+  <div class="story-text">{{ story }}</div>
+</div>
+
+<a href="{{ url_for('home') }}" class="btn btn-block">Play Again</a>
+{% endblock %}

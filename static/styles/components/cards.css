@@ -1,0 +1,54 @@
+.story-container {
+  background-color: var(--light-bg);
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin: 2rem 0;
+  border-left: 4px solid var(--primary);
+}
+
+.player-turn {
+  background-color: var(--primary);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  display: inline-block;
+  margin-bottom: 1rem;
+  font-weight: 500;
+}
+
+.round-indicator {
+  color: var(--primary-dark);
+  font-weight: 600;
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.last-contribution {
+  background-color: var(--light-bg);
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin: 2rem 0;
+  border-left: 4px solid var(--primary);
+}
+
+.contribution-text {
+  font-style: italic;
+  line-height: 1.8;
+  font-size: 1.1rem;
+}
+
+.full-story {
+  background-color: var(--light-bg);
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin: 2rem 0;
+}
+
+.story-list {
+  padding-left: 2rem;
+}
+
+.story-list li {
+  margin-bottom: 1rem;
+  padding-left: 0.5rem;
+}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Setup{% endblock %}
+
+{% block content %}
+<h1>Exquisite Corpse</h1>
+<p>A collaborative storytelling game where each player contributes to a story without seeing previous contributions.</p>
+
+<form method="POST">
+  <div class="form-group">
+    <label for="player_count">Number of Players:</label>
+    <input type="number" id="player_count" name="player_count" min="2" max="10" value="3">
+  </div>
+  <button type="submit" class="btn btn-block">Start Game</button>
+</form>
+{% endblock %}

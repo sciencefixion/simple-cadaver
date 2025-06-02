@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Round {{ round }}{% endblock %}
+
+{% block content %}
+<h1>Exquisite Corpse</h1>
+<span class="round-indicator">Round {{ round }} of 3</span>
+
+{% if last_contribution %}
+<div class="last-contribution">
+  <h3>Last Contribution:</h3>
+  <div class="contribution-text">{{ last_contribution }}</div>
+</div>
+{% endif %}
+
+{% if show_input %}
+<div class="player-turn">Player {{ current_player }}'s Turn</div>
+<form method="POST">
+  <div class="form-group">
+    <label for="contribution">Add your contribution:</label>
+    <input type="text" id="contribution" name="contribution" required autofocus>
+  </div>
+  <button type="submit" class="btn btn-block">Submit</button>
+</form>
+{% else %}
+<div class="player-turn">Pass to Player {{ current_player }}</div>
+<p>When you receive the device, click below:</p>
+<a href="{{ url_for('game', show_all=True) }}" class="btn btn-block">I'm Player {{ current_player }}</a>
+{% endif %}
+{% endblock %}
