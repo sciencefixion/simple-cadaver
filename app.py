@@ -283,7 +283,7 @@ def upload_image(game_code):
     if file.filename == '':
         return redirect(request.url)
     
-    if file and allowed_file(file.filename):
+    if file: #and allowed_file(file.filename):
         filename = secure_filename(f"{game_code}_{file.filename}")
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
