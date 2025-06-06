@@ -284,11 +284,24 @@ def upload_image(game_code):
         return redirect(request.url)
     
     if file: #and allowed_file(file.filename):
-        filename = secure_filename(f"{game_code}_{file.filename}")
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        game.image_url = filename
-        db.session.commit()
+        # filename = secure_filename(f"{game_code}_{file.filename}")
+        # filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        # file.save(filepath)
+        # game.image_url = filename
+        # db.session.commit()
+        try:
+            if not os.path.exists('uploads'):
+                os.makedirs('uploads')
+                
+            file_path = os.path.join('uploads', file.filename)
+            file.save(file_path)
+            s3_url = upload_file_to_s3(file_path, file.filename)
+            game.image_url = s3_url
+            os.remove(file_path)
+            db.session.commit()
+        except Exception as e:
+            app.logger.error(f"File upload error: {str(e)}")
+            flash('Error uploading file', 'error')
     
     return redirect(url_for('result'))
 
