@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Round {{ round }}{% endblock %}
-
 {% block content %}
 <h1>Exquisite Corpse</h1>
-<span class="round-indicator">Round {{ round }} of 3</span>
+<div class="game-info">
+  <span class="game-code">Game Code: {{ game_code }}</span>
+  <span class="round-indicator">Round {{ round }} of 3</span>
+</div>
 
 {% if last_contribution %}
 <div class="last-contribution">

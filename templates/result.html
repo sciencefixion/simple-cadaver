@@ -1,13 +1,34 @@
 {% extends "base.html" %}
 
-{% block title %}Final Story{% endblock %}
-
 {% block content %}
 <h1>Your Exquisite Corpse</h1>
-
-<div class="story-container">
-  <div class="story-text">{{ story }}</div>
+<div class="game-info">
+  <span class="game-code">Game Code: {{ game_code }}</span>
 </div>
 
-<a href="{{ url_for('home') }}" class="btn btn-block">Play Again</a>
+{% if image_url %}
+<div class="story-image">
+  <img src="{{ url_for('uploaded_file', filename=image_url) }}" alt="Story Image">
+</div>
+{% endif %}
+
+<div class="full-story">
+  <ol class="story-list" style="list-style-type: none;">
+    {% for contribution in contributions %}
+    <li>{{ contribution.text }}</li>
+    {% endfor %}
+  </ol>
+</div>
+
+<div class="upload-section">
+  <form action="{{ url_for('upload_image', game_code=game_code) }}" method="POST" enctype="multipart/form-data">
+    <div class="form-group">
+      <label for="image">Add an image to your story:</label>
+      <input type="file" id="image" name="image" accept="image/*">
+    </div>
+    <button type="submit" class="btn">Upload Image</button>
+  </form>
+</div>
+
+<a href="{{ url_for('home') }}" class="btn btn-block">Create New Game</a>
 {% endblock %}
