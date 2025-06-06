@@ -52,3 +52,23 @@
   margin-bottom: 1rem;
   padding-left: 0.5rem;
 }
+
+.game-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.game-code {
+  background-color: var(--primary);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-weight: 500;
+}
+
+.contribution-meta {
+  font-weight: 500;
+  color: var(--primary-dark);
+  margin-right: 0.5rem;
+}
