@@ -1,31 +1,166 @@
-from flask import Flask, render_template, request, redirect, url_for, session, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, session, send_from_directory, flash
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from flask_migrate import Migrate
+from datetime import datetime, timedelta
 import os
 from werkzeug.utils import secure_filename
+import json
+import boto3
+import secrets
+import base64
+from botocore.exceptions import ClientError
+import logging
+from logging.handlers import RotatingFileHandler
 
+# Initialize Flask app
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  # Secure random key for session management
 
-# MySQL Configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://change_user:change_password@localhost/db_name'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# ======================
+# Configuration Settings
+# ======================
 
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
-app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
-app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024  # 2MB max
+def get_flask_secret():
+    """Retrieve secret key from AWS Secrets Manager with fallback options"""
+    secret_name = "prod/flask/app_secret"
+    region_name = "us-east-2"
 
-# Create upload folder if it doesn't exist
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    try:
+        client = boto3.client('secretsmanager', region_name=region_name)
+        response = client.get_secret_value(SecretId=secret_name)
+        
+        if 'SecretBinary' in response:
+            secret = base64.b64decode(response['SecretBinary'])
+        else:
+            secret = response['SecretString']
+            
+        return json.loads(secret)['flask_secret_key']
+    except ClientError as e:
+        app.logger.error(f"AWS Secrets Manager Error: {e.response['Error']['Code']}")
+        return None
+    except Exception as e:
+        app.logger.error(f"Unexpected error retrieving secret: {str(e)}")
+        return None
 
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+# Set secret key with multiple fallback options
+secret_key = (
+    get_flask_secret() or 
+    os.environ.get('FLASK_SECRET_KEY') or 
+    secrets.token_hex(32)
+)
+app.secret_key = secret_key
 
-# Initialize the database
+if not get_flask_secret() and not os.environ.get('FLASK_SECRET_KEY'):
+    app.logger.warning("Using temporary secret key - not suitable for production!")
+
+app.config.update(
+    # Security settings
+    SESSION_COOKIE_SECURE=False,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    PERMANENT_SESSION_LIFETIME=timedelta(days=1),
+    SESSION_COOKIE_NAME='flask_app_session',  # Explicit name
+    SESSION_REFRESH_EACH_REQUEST=True,
+    
+    # Database settings
+    SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    SQLALCHEMY_POOL_RECYCLE=3600,  # Recycle connections every hour
+    SQLALCHEMY_POOL_TIMEOUT=30,
+    SQLALCHEMY_ENGINE_OPTIONS={
+        'pool_pre_ping': True,
+        'pool_size': 20,
+        'max_overflow': 10,
+        'connect_args': {
+            'ssl': {'ca': '/etc/ssl/certs/rds-combined-ca-bundle.pem'}  # Common Linux location for RDS SSL certificate
+        }
+    }
+)
+
+# ======================
+# Logging Configuration
+# ======================
+
+def configure_logging():
+    """Configure production-grade logging"""
+    root = logging.getLogger()
+    if root.handlers:
+        for handler in root.handlers:
+            root.removeHandler(handler)
+
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+
+    file_handler = RotatingFileHandler(
+        'logs/app.log',
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5
+    )
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    ))
+    file_handler.setLevel(logging.INFO)
+    
+    app.logger.addHandler(file_handler)
+    app.logger.setLevel(logging.INFO)
+    app.logger.info('Application starting up')
+
+configure_logging()
+
+# ======================
+# Database Configuration
+# ======================
+
+def get_db_secret(secret_name, region_name='us-east-2'):
+    """Retrieve database credentials from AWS Secrets Manager"""
+    try:
+        client = boto3.client('secretsmanager', region_name=region_name)
+        response = client.get_secret_value(SecretId=secret_name)
+        return json.loads(response['SecretString'])
+    except Exception as e:
+        app.logger.error(f"Error fetching DB secret: {str(e)}")
+        raise
+
+try:
+    secret = get_db_secret('prod/rds/mydb')
+    app.config['SQLALCHEMY_DATABASE_URI'] = (
+        f"mysql+pymysql://{secret['username']}:{secret['password']}"
+        f"@{secret['host']}/{secret['dbname']}?charset=utf8mb4"
+    )
+except Exception as e:
+    app.logger.critical(f"Failed to configure database: {str(e)}")
+    raise
+
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
+# ======================
+# AWS S3 Configuration
+# ======================
+
+BUCKET_NAME = 'flask-todo-april-bucket2'
+
+def upload_file_to_s3(file_path, s3_key):
+    """Upload file to S3 with proper error handling"""
+    s3 = boto3.client("s3")
+    try:
+        s3.upload_file(
+            file_path,
+            BUCKET_NAME,
+            s3_key,
+            ExtraArgs={
+                'ACL': 'private',
+                'ContentType': 'application/octet-stream'
+            }
+        )
+        app.logger.info(f"Uploaded {s3_key} to {BUCKET_NAME}")
+        return f"https://{BUCKET_NAME}.s3.amazonaws.com/{s3_key}"
+    except Exception as e:
+        app.logger.error(f"Error uploading file {s3_key}: {str(e)}")
+        raise
+
+# ======================
 # Database Models
+# ======================
+
 class Game(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(8), unique=True, nullable=False)
@@ -48,6 +183,10 @@ class Contribution(db.Model):
 # Create tables (run once)
 with app.app_context():
     db.create_all()
+
+# ======================
+# Application Routes
+# ======================
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
@@ -144,12 +283,25 @@ def upload_image(game_code):
     if file.filename == '':
         return redirect(request.url)
     
-    if file and allowed_file(file.filename):
-        filename = secure_filename(f"{game_code}_{file.filename}")
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        game.image_url = filename
-        db.session.commit()
+    if file: #and allowed_file(file.filename):
+        # filename = secure_filename(f"{game_code}_{file.filename}")
+        # filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        # file.save(filepath)
+        # game.image_url = filename
+        # db.session.commit()
+        try:
+            if not os.path.exists('uploads'):
+                os.makedirs('uploads')
+                
+            file_path = os.path.join('uploads', file.filename)
+            file.save(file_path)
+            s3_url = upload_file_to_s3(file_path, file.filename)
+            game.image_url = s3_url
+            os.remove(file_path)
+            db.session.commit()
+        except Exception as e:
+            app.logger.error(f"File upload error: {str(e)}")
+            flash('Error uploading file', 'error')
     
     return redirect(url_for('result'))
 
@@ -158,6 +310,19 @@ def upload_image(game_code):
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
+# ======================
+# Application Startup
+# ======================
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Create required directories
+    for directory in ['uploads', 'logs']:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+    
+    # Initialize database
+    with app.app_context():
+        db.create_all()
+    
+    # Run application
+    app.run(host='0.0.0.0', port=5000, debug=True)
